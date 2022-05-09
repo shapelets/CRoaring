@@ -3139,6 +3139,125 @@ roaring_bitmap_frozen_view(const char *buf, size_t length) {
     return rb;
 }
 
+
+bool _cumulatedCardinalitiesCacheIsValid = false;
+uint32_t *_highToCumulatedCardinality = NULL; 
+
+// starts with binary search and finishes with a sequential search
+int hybridUnsignedBinarySearch(uint16_t *array, uint32_t begin, uint32_t end, uint32_t k) {
+    // next line accelerates the possibly common case where the value would
+    // be inserted at the end
+    if ((end > 0) && ((array[end - 1]) < k)) {
+        return -end - 1;
+    }
+
+    uint32_t low = begin;
+    uint32_t high = end - 1;
+    // 32 in the next line matches the size of a cache line
+    while (low + 32 <= high) {
+        uint32_t middleIndex = (low + high) >> 1;
+        uint16_t middleValue = array[middleIndex];
+
+        if (middleValue < k) {
+            low = middleIndex + 1;
+        } else if (middleValue > k) {
+            high = middleIndex - 1;
+        } else {
+            return middleIndex;
+        }
+    }
+    // we finish the job with a sequential search
+    uint32_t x = low;
+    for (; x <= high; ++x) {
+        uint16_t val = (array[x]);
+        if (val >= k) {
+            if (val == k) {
+                return x;
+            }
+            break;
+        }
+    }
+    return -(x + 1);
+}
+
+void preComputeCardinalities(const roaring_bitmap_t *bm) {
+    if (!_cumulatedCardinalitiesCacheIsValid) {
+        int nbBuckets = bm->high_low_container.size;
+
+        // Ensure the cache size is the right one
+        if (_highToCumulatedCardinality == NULL || sizeof(_highToCumulatedCardinality) != nbBuckets) {
+            roaring_free(_highToCumulatedCardinality);
+            _highToCumulatedCardinality = roaring_malloc(nbBuckets * sizeof(uint32_t));
+        }
+
+        // Ensure the cache content is valid
+        if (sizeof(_highToCumulatedCardinality) >= 1) {
+            // As we compute the cumulated cardinalities, the first index is an edge case
+            _highToCumulatedCardinality[0] = container_get_cardinality(bm->high_low_container.containers[0], bm->high_low_container.typecodes[0]);
+            for (uint32_t i = 1; i < sizeof(_highToCumulatedCardinality); i++) {
+                _highToCumulatedCardinality[i] = _highToCumulatedCardinality[i - 1]
+                    + container_get_cardinality(bm->high_low_container.containers[i], bm->high_low_container.typecodes[i]);
+            }
+        }
+
+        _cumulatedCardinalitiesCacheIsValid = true;
+    }
+}
+
+/**
+* roaring_bitmap_fast_rank returns the number of integers that are smaller or equal
+* to x.
+* Uses a cache for cardinalities.
+*/
+uint64_t roaring_bitmap_fast_rank(const roaring_bitmap_t *bm, uint32_t x) {
+    preComputeCardinalities(bm);
+    uint64_t size = 0;
+    uint32_t xhigh = x >> 16;
+
+    if (bm->high_low_container.size == 0) {
+      return 0L;
+    }
+
+    int index = hybridUnsignedBinarySearch(bm->high_low_container.keys, 0,
+        bm->high_low_container.size, xhigh);
+
+    bool hasBitmapOnIdex;
+    if (index < 0) {
+      hasBitmapOnIdex = false;
+      index = -1 - index;
+    } else {
+      hasBitmapOnIdex = true;
+    }
+
+    if (index > 0) {
+      size += _highToCumulatedCardinality[index - 1];
+    }
+
+    uint64_t rank = size;
+    if (hasBitmapOnIdex) {
+      rank = size + container_rank(bm->high_low_container.containers[index],
+                                         bm->high_low_container.typecodes[index],
+                                         x & 0xFFFF);
+    }
+
+
+    // for (int i = 0; i < bm->high_low_container.size; i++) {
+    //     uint32_t key = bm->high_low_container.keys[i];
+    //     if (xhigh > key) {
+    //         size +=
+    //             container_get_cardinality(bm->high_low_container.containers[i],
+    //                                       bm->high_low_container.typecodes[i]);
+    //     } else if (xhigh == key) {
+    //         return size + container_rank(bm->high_low_container.containers[i],
+    //                                      bm->high_low_container.typecodes[i],
+    //                                      x & 0xFFFF);
+    //     } else {
+    //         return size;
+    //     }
+    // }
+    return rank;
+}
+
 #ifdef __cplusplus
 } } }  // extern "C" { namespace roaring {
 #endif
