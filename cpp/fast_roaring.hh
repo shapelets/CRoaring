@@ -86,7 +86,10 @@ public:
     /**
      * Add value x
      */
-    void add(uint32_t x) { api::roaring_bitmap_add(&roaring, x); }
+    void add(uint32_t x) {
+        api::_resetCache();
+        api::roaring_bitmap_add(&roaring, x);
+    }
 
     /**
      * Add value x
@@ -94,6 +97,7 @@ public:
      * existing.
      */
     bool addChecked(uint32_t x) {
+        api::_resetCache();
         return api::roaring_bitmap_add_checked(&roaring, x);
     }
 
@@ -101,6 +105,7 @@ public:
      * Add all values from x (included) to y (excluded)
      */
     void addRange(const uint64_t x, const uint64_t y)  {
+        api::_resetCache();
         return api::roaring_bitmap_add_range(&roaring, x, y);
     }
 
@@ -108,13 +113,17 @@ public:
      * Add value n_args from pointer vals
      */
     void addMany(size_t n_args, const uint32_t *vals) {
+        api::_resetCache();
         api::roaring_bitmap_add_many(&roaring, n_args, vals);
     }
 
     /**
      * Remove value x
      */
-    void remove(uint32_t x) { api::roaring_bitmap_remove(&roaring, x); }
+    void remove(uint32_t x) {
+        api::_resetCache();
+        api::roaring_bitmap_remove(&roaring, x);
+    }
 
     /**
      * Remove value x
@@ -122,6 +131,7 @@ public:
      * existing.
      */
     bool removeChecked(uint32_t x) {
+        api::_resetCache();
         return api::roaring_bitmap_remove_checked(&roaring, x);
     }
 
@@ -181,6 +191,7 @@ public:
         api::roaring_bitmap_set_copy_on_write(
             &roaring,
             api::roaring_bitmap_get_copy_on_write(&r.roaring));
+        api::_resetCache();
         return *this;
     }
 
@@ -195,6 +206,7 @@ public:
         //
         roaring = r.roaring;
         api::roaring_bitmap_init_cleared(&r.roaring);
+        api::_resetCache();
 
         return *this;
     }
@@ -206,6 +218,7 @@ public:
      */
     Roaring &operator&=(const Roaring &r) {
         api::roaring_bitmap_and_inplace(&roaring, &r.roaring);
+        api::_resetCache();
         return *this;
     }
 
@@ -216,6 +229,7 @@ public:
      */
     Roaring &operator-=(const Roaring &r) {
         api::roaring_bitmap_andnot_inplace(&roaring, &r.roaring);
+        api::_resetCache();
         return *this;
     }
 
@@ -228,6 +242,7 @@ public:
      */
     Roaring &operator|=(const Roaring &r) {
         api::roaring_bitmap_or_inplace(&roaring, &r.roaring);
+        api::_resetCache();
         return *this;
     }
 
@@ -238,13 +253,17 @@ public:
      */
     Roaring &operator^=(const Roaring &r) {
         api::roaring_bitmap_xor_inplace(&roaring, &r.roaring);
+        api::_resetCache();
         return *this;
     }
 
     /**
      * Exchange the content of this bitmap with another.
      */
-    void swap(Roaring &r) { std::swap(r.roaring, roaring); }
+    void swap(Roaring &r) {
+        std::swap(r.roaring, roaring);
+        api::_resetCache();
+    }
 
     /**
      * Get the cardinality of the bitmap (number of elements).
@@ -300,6 +319,7 @@ public:
      */
     void flip(uint64_t range_start, uint64_t range_end) {
         api::roaring_bitmap_flip_inplace(&roaring, range_start, range_end);
+        api::_resetCache();
     }
 
     /**
@@ -307,6 +327,7 @@ public:
      * Return whether a change was applied.
      */
     bool removeRunCompression() {
+        api::_resetCache();
         return api::roaring_bitmap_remove_run_compression(&roaring);
     }
 
@@ -316,13 +337,19 @@ public:
      * Returns true if the result has at least one run container.  Additional
      * savings might be possible by calling shrinkToFit().
      */
-    bool runOptimize() { return api::roaring_bitmap_run_optimize(&roaring); }
+    bool runOptimize() {
+        api::_resetCache();
+        return api::roaring_bitmap_run_optimize(&roaring);
+    }
 
     /**
      * If needed, reallocate memory to shrink the memory usage. Returns
      * the number of bytes saved.
      */
-    size_t shrinkToFit() { return api::roaring_bitmap_shrink_to_fit(&roaring); }
+    size_t shrinkToFit() {
+        api::_resetCache();
+        return api::roaring_bitmap_shrink_to_fit(&roaring);
+    }
 
     /**
      * Iterate over the bitmap elements. The function iterator is called once
@@ -405,7 +432,7 @@ public:
      * smallest value when using index 0.
      */
     uint64_t rank(uint32_t x) const {
-        return api::roaring_bitmap_rank(&roaring, x);
+        return api::roaring_bitmap_fast_rank(&roaring, x);
     }
 
     /**
@@ -448,6 +475,7 @@ public:
      *      }  // namespace boost
      */
     size_t write(char *buf, bool portable = true) const {
+        api::_resetCache();
         if (portable)
             return api::roaring_bitmap_portable_serialize(&roaring, buf);
         else

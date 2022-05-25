@@ -3258,6 +3258,11 @@ uint64_t roaring_bitmap_fast_rank(const roaring_bitmap_t *bm, uint32_t x) {
     return rank;
 }
 
+void _resetCache() {
+// Reset the cache on any write operation
+    _cumulatedCardinalitiesCacheIsValid = false;
+}
+
 #ifdef __cplusplus
 } } }  // extern "C" { namespace roaring {
 #endif

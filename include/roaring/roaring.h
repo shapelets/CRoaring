@@ -665,6 +665,15 @@ bool roaring_bitmap_select(const roaring_bitmap_t *r, uint32_t rank,
 uint64_t roaring_bitmap_rank(const roaring_bitmap_t *r, uint32_t x);
 
 /**
+* roaring_bitmap_fast_rank returns the number of integers that are smaller or equal
+* to x.
+* Uses a cache for cardinalities.
+*/
+uint64_t roaring_bitmap_fast_rank(const roaring_bitmap_t *bm, uint32_t x);
+
+void _resetCache();
+
+/**
  * Returns the smallest value in the set, or UINT32_MAX if the set is empty.
  */
 uint32_t roaring_bitmap_minimum(const roaring_bitmap_t *r);
